@@ -2,8 +2,17 @@ from fastapi import FastAPI
 from backend.coordinate_utils import radec_to_vector
 from backend.data_loader import fetch_meteor_events
 from backend.gmn_parser import load_gmn_data
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def home():
@@ -25,7 +34,7 @@ def get_events():
 
         events.append({
             "id": row.iloc[0],
-            "velocity_km_s": row.iloc[16],
+            "velocity": float(row.iloc[16]) if row.iloc[16] else 0,
             "start_lat": row.iloc[55],
             "start_lon": row.iloc[57],
             "end_lat": row.iloc[60],

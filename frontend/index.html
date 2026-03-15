@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<title>Meteor Trajectory Explorer</title>
+
+<style>
+
+body{
+margin:0;
+background:#050505;
+color:white;
+font-family:Arial;
+overflow:hidden;
+}
+
+#ui{
+position:absolute;
+top:20px;
+left:20px;
+z-index:10;
+}
+
+button{
+padding:12px 20px;
+font-size:16px;
+border:none;
+background:#ed7f02;
+color:white;
+border-radius:6px;
+cursor:pointer;
+}
+
+button:hover{
+background:#ff8c32;
+}
+
+#meteorInfo{
+position:absolute;
+right:20px;
+top:20px;
+background:#111;
+padding:20px;
+width:260px;
+border-radius:8px;
+font-size:14px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div id="ui">
+<h2>Meteor Explorer</h2>
+<button onclick="loadMeteors()">Load Meteor Data</button>
+</div>
+
+<div id="meteorInfo">
+<h3>Meteor Details</h3>
+<p>Click a meteor path to see details.</p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.js"></script>
+
+
+<script>
+
+let scene = new THREE.Scene()
+
+let camera = new THREE.PerspectiveCamera(
+75,
+window.innerWidth/window.innerHeight,
+0.1,
+1000
+)
+
+let renderer = new THREE.WebGLRenderer({antialias:true})
+
+let meteors = [] 
+
+renderer.setSize(window.innerWidth, window.innerHeight)
+
+document.body.appendChild(renderer.domElement)
+
+camera.position.z = 4
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement)
+
+controls.enableDamping = true
+controls.dampingFactor = 0.05
+controls.rotateSpeed = 0.5
+controls.zoomSpeed = 1
+
+
+// LIGHT
+const light = new THREE.PointLight(0xffffff,2)
+light.position.set(5,5,5)
+scene.add(light)
+
+// AMBIENT LIGHT
+const ambient = new THREE.AmbientLight(0xffffff,0.6)
+scene.add(ambient)
+
+// BIGGER EARTH
+const earthGeometry = new THREE.SphereGeometry(2,64,64)
+
+const textureLoader = new THREE.TextureLoader()
+
+const earthTexture = textureLoader.load(
+"https://cdn.jsdelivr.net/gh/jeromeetienne/threex.planets@master/images/earthmap1k.jpg"
+)
+
+const earthMaterial = new THREE.MeshPhongMaterial({
+map:earthTexture
+})
+
+const earth = new THREE.Mesh(earthGeometry,earthMaterial)
+
+scene.add(earth)
+
+
+
+
+function latLonToVector3(lat,lon,height=0){
+
+const radius = 3 + height
+
+const phi = (90-lat)*(Math.PI/180)
+const theta = (lon+180)*(Math.PI/180)
+
+const x = -radius*Math.sin(phi)*Math.cos(theta)
+const z = radius*Math.sin(phi)*Math.sin(theta)
+const y = radius*Math.cos(phi)
+
+return new THREE.Vector3(x,y,z)
+
+}
+
+
+async function loadMeteors(){
+
+const res = await fetch("http://127.0.0.1:8000/events")
+
+const meteordata = await res.json()
+
+meteordata.forEach(m => {
+
+const start = latLonToVector3(m.start_lat,m.start_lon,0.6)
+const end = latLonToVector3(m.end_lat,m.end_lon,0)
+
+const mid = start.clone().add(end).multiplyScalar(0.5)
+mid.normalize().multiplyScalar(4.2)   // curve outward
+
+const curve = new THREE.QuadraticBezierCurve3(start, mid, end)
+
+const points = curve.getPoints(50)
+
+const geometry = new THREE.BufferGeometry().setFromPoints(points)
+
+const material = new THREE.LineBasicMaterial({
+color:0xffaa00
+})
+
+
+const line = new THREE.Line(geometry,material)
+
+line.userData = m
+
+scene.add(line)
+
+// meteor object
+const meteorGeometry = new THREE.SphereGeometry(0.02,16,16)
+
+const meteorMaterial = new THREE.MeshBasicMaterial({
+color:0xff5500
+})
+
+const meteor = new THREE.Mesh(meteorGeometry, meteorMaterial)
+
+scene.add(meteor)
+
+meteors.push({
+curve: curve,
+meteor: meteor,
+progress: Math.random()
+})
+
+
+})
+
+}
+
+
+
+const raycaster = new THREE.Raycaster()
+const mouse = new THREE.Vector2()
+
+
+window.addEventListener("click",function(event){
+
+mouse.x = (event.clientX/window.innerWidth)*2-1
+mouse.y = -(event.clientY/window.innerHeight)*2+1
+
+raycaster.setFromCamera(mouse,camera)
+
+const intersects = raycaster.intersectObjects(scene.children)
+
+if(intersects.length>0){
+
+const obj = intersects[0].object
+
+if(obj.userData.id){
+
+const m = obj.userData
+
+document.getElementById("meteorInfo").innerHTML = `
+<h3>Meteor Details</h3>
+<b>ID:</b> ${m.id}<br>
+<b>Velocity:</b> ${m.velocity} km/s<br><br>
+
+<b>Start</b><br>
+Lat: ${m.start_lat}<br>
+Lon: ${m.start_lon}<br><br>
+
+<b>End</b><br>
+Lat: ${m.end_lat}<br>
+Lon: ${m.end_lon}
+`
+
+}
+
+}
+
+})
+
+
+const starsGeometry = new THREE.BufferGeometry()
+const starsMaterial = new THREE.PointsMaterial({color:0xffffff})
+
+const starVertices = []
+
+for(let i=0;i<10000;i++){
+const x=(Math.random()-0.5)*2000
+const y=(Math.random()-0.5)*2000
+const z=(Math.random()-0.5)*2000
+starVertices.push(x,y,z)
+}
+
+starsGeometry.setAttribute(
+'position',
+new THREE.Float32BufferAttribute(starVertices,3)
+)
+
+const stars = new THREE.Points(starsGeometry,starsMaterial)
+
+scene.add(stars)
+
+function animate(){
+
+requestAnimationFrame(animate)
+
+earth.rotation.y += 0.0015
+
+controls.update()
+
+meteors.forEach(m => {
+
+m.progress += 0.002
+
+if(m.progress > 1) m.progress = 0
+
+const pos = m.curve.getPoint(m.progress)
+
+m.meteor.position.copy(pos)
+
+})
+
+renderer.render(scene,camera)
+
+}
+
+animate()
+
+</script>
+
+</body>
+
+</html>
