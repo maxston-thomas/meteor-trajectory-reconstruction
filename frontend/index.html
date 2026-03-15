@@ -53,7 +53,7 @@ font-size:14px;
 <body>
 
 <div id="ui">
-<h2>Meteor Explorer</h2>
+<h2>Meteor Xplorer</h2>
 <button onclick="loadMeteors()">Load Meteor Data</button>
 </div>
 
@@ -69,6 +69,8 @@ font-size:14px;
 <script>
 
 let scene = new THREE.Scene()
+
+let selectedMeteor = null
 
 let camera = new THREE.PerspectiveCamera(
 75,
@@ -102,7 +104,7 @@ light.position.set(5,5,5)
 scene.add(light)
 
 // AMBIENT LIGHT
-const ambient = new THREE.AmbientLight(0xffffff,0.6)
+const ambient = new THREE.AmbientLight(0xffffff,0.7)
 scene.add(ambient)
 
 // EARTH
@@ -161,7 +163,9 @@ const geometry = new THREE.BufferGeometry().setFromPoints(points)
 
 // FIX: LineBasicMaterial does not support emissive — removed invalid property
 const material = new THREE.LineBasicMaterial({
-color: 0xffaa00
+color: 0xffaa00,
+transparent:true,
+opacity:0.8
 })
 
 const line = new THREE.Line(geometry,material)
@@ -182,6 +186,8 @@ const meteor = new THREE.Mesh(meteorGeometry, meteorMaterial)
 
 scene.add(meteor)
 
+line.userData.meteor = meteor
+
 meteors.push({
 curve: curve,
 meteor: meteor,
@@ -200,7 +206,7 @@ raycaster.params.Line.threshold = 0.05
 const mouse = new THREE.Vector2()
 
 
-window.addEventListener("click",function(event){
+window.addEventListener("click", function(event){
 
 mouse.x = (event.clientX/window.innerWidth)*2-1
 mouse.y = -(event.clientY/window.innerHeight)*2+1
@@ -213,7 +219,37 @@ if(intersects.length > 0){
 
 const obj = intersects[0].object
 
-if(obj.userData.id){
+// reset previous
+if(selectedMeteor){
+
+selectedMeteor.material.color.set(0xffaa00)
+
+if(selectedMeteor.userData.meteor){
+selectedMeteor.userData.meteor.material.color.set(0xff5500)
+}
+
+}
+
+meteorLines.forEach(line => {
+line.material.opacity = 0.15
+})
+
+// reset meteor ball colors
+meteors.forEach(m => {
+m.meteor.material.color.set(0x323232)
+})
+
+// highlight selected curve
+obj.material.opacity = 1
+obj.material.color.set(0xff0000)
+
+// highlight meteor ball
+if(obj.userData.meteor){
+obj.userData.meteor.material.color.set(0xff5500)
+
+}
+
+selectedMeteor = obj
 
 const m = obj.userData
 
@@ -230,12 +266,7 @@ Lon: ${m.start_lon}<br><br>
 Lat: ${m.end_lat}<br>
 Lon: ${m.end_lon}
 `
-
-}
-
-}
-
-})
+}})
 
 
 const starsGeometry = new THREE.BufferGeometry()
