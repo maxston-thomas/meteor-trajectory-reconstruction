@@ -11,4 +11,7 @@ def load_gmn_data(file_path):
 
     df.columns = [c.strip() for c in df.columns]
 
+    print(df.columns)
+
+
     return df
